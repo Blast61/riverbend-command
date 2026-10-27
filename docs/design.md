@@ -1,51 +1,74 @@
 # Riverbend Command — Design Note
 
-## Architecture
-React/Vite + TypeScript + Material UI client ↔ Node/Express + TypeScript API ↔ SQLite via Prisma. Zod at API boundaries. Domain service owns routing/permissions and transactionally records actions and audit entries. Demo user selection is **not secure authentication**: use a well-defined identity adapter, suitable only for a synthetic demo.
+## Architecture and identity
 
-## Data model (conceptual)
-- `User`: id, name, department, roles, managerId (or explicit reporting hierarchy). Finance-view scope independently determined from approval authority.
-- `PurchaseRequest`: id, requesterId, vendor, amountCents, reason, status, version, activeStageId nullable, submittedAt, updatedAt.
-- `ApprovalStage`: id, requestId, requestVersion, ordinal, roleRequired, assigneeId, status (`WAITING`, `PENDING`, `APPROVED`, `SUPERSEDED`), activatedAt, decidedAt, decisionComment. Add unique(requestId, version, ordinal).
-- `AuditEvent`: id, requestId, version, actorId or SYSTEM, action, priorState, nextState, details JSON, occurredAt, immutable through application API.
+React/Vite + TypeScript + Material UI client (planned) ↔ Node/Express + TypeScript API ↔ SQLite via Prisma. Zod schemas in `server/src/validation.ts` validate strict mutation bodies and list queries. `authorization.ts` owns role/ownership checks and the shared read-scope predicate. Domain services own transitions and transaction boundaries; HTTP handlers resolve identity and call them.
 
-Use transactions to update request + stage(s) + append events. Review one-to-one active-stage rule and ensure stale version stage actions fail.
+`createApp(db, resolveIdentity)` defaults to the centralized `demoIdentity` adapter. `X-Demo-User-Id` selects a seeded database user; it is **not production authentication**. A future trusted resolver must validate Entra tokens and map tenant/object identity to a local actor; domain services continue accepting the resolved actor. Integration is not implemented. The current single-role field models the five demo personas, not independently assigned multi-role grants.
 
-## Request states and actions
-- `DRAFT`: editable by owner; `submit` → `PENDING_APPROVAL` (new version and stages).
-- `PENDING_APPROVAL`: active assigned approver may `approve` → next pending stage or `APPROVED`; `reject` with comment → `REJECTED`; `request_changes` with comment → `CHANGES_REQUESTED`.
-- `CHANGES_REQUESTED`: requester can edit and `resubmit` → `PENDING_APPROVAL` with new version and stages. Preserve historical stages/events; do not mutate old decisions.
-- `APPROVED` and `REJECTED`: terminal in MVP. Finance only views; no action.
+## Persistence
 
-No general edit route for submitted requests. Do not overwrite historical data without emitting audit events. When resubmitting, previous stages are retained (uncompleted stages superseded). Approvals from previous versions are never reused.
+- `User`: id, name, department, role, managerId. The reporting chain supplies stage assignees.
+- `PurchaseRequest`: current vendor/amountCents/reason, requesterId, status, submitted version, activeStageId, submittedAt/updatedAt. Current fields are editable only while draft/returned; they can differ from the last submitted snapshot until resubmission.
+- `PurchaseRevision`: immutable submitted vendor/amountCents/reason/submittedAt snapshot, keyed by `(requestId, version)`. Every submission creates a fresh row. No snapshot mutation API exists.
+- `ApprovalStage`: request/version/ordinal, role and assignee, status (`WAITING`, `PENDING`, `APPROVED`, `SUPERSEDED`), activation/decision timestamps, decision/comment. Unique `(requestId, requestVersion, ordinal)`.
+- `AuditEvent`: request/version, actor, action, prior/next request state, JSON-serialized details, timestamp. No update/delete API. Details include decision/stage/comment or purchase snapshots/edit deltas.
 
-## Routing policy
+A decided stage keeps its explicit decision (`APPROVED`, `REJECTED`, `CHANGES_REQUESTED`). To retain ADR-008's stage statuses, rejection/return closes its stage as `SUPERSEDED` with decision/comment/time; untouched future stages become `SUPERSEDED` without a decision. Prior `APPROVED` stages and all old decisions/events remain preserved. New versions always restart at manager.
+
+## Workflow and transactions
+
+- Direct creation submits version 1 and creates its route, snapshot and audit in one transaction.
+- Only the current assigned approver with the matching role may act on a pending stage of the current version. Owner/self-approval and finance-only actions are denied server-side.
+- `APPROVED` marks the stage approved and activates the next stage, or completes the request. Next-stage aging starts at activation, not initial submission.
+- `REJECTED` requires a trimmed nonblank comment and is terminal. `CHANGES_REQUESTED` also requires a comment and returns editing control to the requester. Both clear the active stage.
+- Only the owner may patch `DRAFT`/`CHANGES_REQUESTED`. Patch accepts purchase fields only, plus expected `version`; it records `EDITED` with previous values and changes. Editing does not itself advance submitted version or mutate a submitted snapshot.
+- `POST .../submissions` requires expected version, increments it, recalculates route from current amount and creates a new snapshot/audit. For an existing version-0 draft this creates version 1. There is no draft-creation endpoint; `POST /api/requests` keeps M1's direct-submit behavior.
+- Stale/foreign/duplicate stage IDs and stale submission versions are rejected. No API reuses old approvals or permits pending/terminal purchase edits.
+
+All mutations use one Prisma interactive transaction, including stage changes and audit insertion. Conditional request/stage updates claim the expected status/version/active stage. SQLite serializes writes; lock/transaction contention maps to 409 rather than silently replaying an action. Reload before retrying. Tests exercise simultaneous same-stage decisions and simultaneous resubmissions. Broader multi-process load/power-loss testing is not claimed. Concurrent edits within the same editable version use last-writer-wins; the audit records each successful patch. There is no edit-generation token for same-version forms.
+
+## Routing and read scope
+
 - 1–99,999 cents: MANAGER.
 - 100,000–999,999 cents: MANAGER → DIRECTOR.
 - 1,000,000+ cents: MANAGER → DIRECTOR → VP_FINANCE.
-- A request owned by a designated approver cannot be approved by its owner; treat unresolved conflict as blocked, not skipped.
 
-## API sketch (names may be adjusted without changing semantics)
-- `GET /api/demo-users` seeded demo identities and roles.
-- `GET /api/requests?q=&status=&approverId=` role-scoped list with current owner and aging.
-- `POST /api/requests` create draft or submit directly; document behavior in README.
-- `GET /api/requests/:id` request, versioned stages, audit trail; scoped by identity.
-- `PATCH /api/requests/:id` edit draft or CHANGES_REQUESTED as owner.
-- `POST /api/requests/:id/submissions` initial submit / resubmit.
-- `POST /api/requests/:id/approvals` with validated `decision` (`APPROVE`, `REJECT`, `REQUEST_CHANGES`), `stageId`, and conditional required `comment`.
+Thresholds remain in `policy.ts`. `workflow-store.ts` shares route creation between initial submission and resubmission. Missing/wrong-role reporting configuration returns 409, with rollback. Self-assignment is flagged as `blockedAssignment` and cannot be acted on; it is never silently skipped.
 
-First slice: `POST /api/requests` submits directly, creating version 1 and its route atomically. Draft editing, repeat submissions, and approval actions follow in the next slice; their endpoints are not claimed as implemented yet.
+Lists and details use the same scope: own requests, plus currently assigned pending requests for approver roles; finance-only users can read all. Future/unrelated/past assignees receive no additional read access. Once a non-owner approver advances a request, it leaves their queue and subsequent detail access; the mutation response still contains the action result. Hidden/missing details return 404. Filters are intersected with scope and never widen it.
 
-Demo user identity should be injected through one adapter (e.g., `X-Demo-User-Id` header only in demo builds). Make clear that a user-controlled header cannot be used as production authentication. All mutation endpoints verify permissions server-side.
+List/detail include current stage/assignee and derived `blockedAssignment`/`delayed` (>72 elapsed hours) flags. Details additionally include all versioned stages, immutable snapshots and chronological audit with actors. Lists omit history for compactness. Search is substring matching with SQLite's collation behavior; list results are unpaginated for the small synthetic dataset.
 
-## UI layout
-Role/user switcher with clear demo-mode banner; summary tiles for relevant role; searchable/filterable request table showing vendor, amount, status, active assignee, age; detail panel with chronological compact stage timeline and audit events; approval actions only for active authorized persona; requester edit/resubmit form.
+## Implemented API
 
-## Automated tests
-Priority: routing boundaries, manager→director→VP progression, no out-of-order approvals, self-approval denial, finance denial, mandatory rejection/comment, resubmit new version preserving old history, atomic audit record, role visibility, stale stage. Use isolated temporary test DB / transactions so tests are repeatable.
+All request endpoints require a resolved actor; liveness and demo user enumeration are public in this local demo.
 
-## Risks and limits
-MVP not production auth, data-retention system, delegation workflow, or enterprise security boundary. App-level append-only audit is not database-admin-proof. Enforce concurrency safety for double actions where feasible with transactions and conditional status/version checks. If implementation constraints require a simplified concurrency story, document honestly.
+| Method/path | Body/query | Result |
+|---|---|---|
+| `GET /api/health` | — | Liveness |
+| `GET /api/demo-users` | — | Synthetic personas |
+| `POST /api/requests` | `{vendor, amountCents, reason}` | 201; submitted request/version 1 |
+| `GET /api/requests` | optional `q`, `vendor`, `status`, `approverId` | Scoped array; current stage and assignee |
+| `GET /api/requests/:id` | — | Scoped detail, snapshots, stages and audit |
+| `PATCH /api/requests/:id` | `{version, vendor?, amountCents?, reason?}`; at least one purchase field | 200; owner-only editable request |
+| `POST /api/requests/:id/submissions` | `{version}` | 201; fresh submitted version and route |
+| `POST /api/requests/:id/approvals` | `{stageId, decision, comment?}` | 201; atomic decision and resulting workflow |
 
-## Milestone 1 review
-The identity adapter resolves a database actor; the domain service accepts that actor explicitly and sets requester/audit identity itself. Future Entra integration must validate tokens and map external identity to this local actor; neither is implemented. Current single-role storage covers demo personas, not independent multi-role grants. Submission writes and audit share one transaction; tests force both late-stage and audit failures to verify rollback. See [review](milestone-1-review.md) for security/dependency findings and scope limits.
+Decision values are `APPROVED`, `REJECTED`, `CHANGES_REQUESTED` per the candidate's Milestone 2 instruction. Comments required for the latter two. Unknown fields and malformed/repeated query parameters are rejected; IDs and text are length-limited. 400 validation, 401 missing/unknown identity, 403 forbidden, 404 missing/hidden detail, 409 stale/state/configuration/contention conflict, 413 oversized body; unexpected failures return generic 500.
+
+## Migration and verification
+
+`202610260002_workflow` adds `ApprovalStage.decision` and `PurchaseRevision`, backfilling current submitted snapshots from M1 rows. M1 had no edit endpoint, so its stored purchase fields are the version-1 submission. Original migration, stage IDs and audits are retained. Run normal `npm run db:migrate` and `npm run db:seed`; do not reset existing demo data. The migration suite deploys real Prisma migrations against both fresh SQLite and an M1-populated database and checks backfill/history preservation and idempotent seeding.
+
+Automated tests cover routing boundaries, sequential/final decisions, required comments, roles/ownership/self-approval, stale IDs/versions, editing rules, upward/downward rerouting, immutable revisions/history, read scopes/filters, injected identity, concurrent duplicate actions and forced stage/audit failures. See [Milestone 2 review](milestone-2-review.md) for actual execution results.
+
+## UI and limitations
+
+Frontend remains unimplemented in this milestone. Planned UI: demo banner/role switcher, scoped list/search/filters, detail timeline/audit, edit/resubmit and assigned decision controls, aging badge. No delegation, notifications, real payments or production hosting.
+
+App-level append-only audit/snapshots are not database-admin-proof. Cross-row state invariants rely on domain transactions rather than arbitrary SQL protection. Single-role users, explicit seeded reporting hierarchy, unpaginated lists and caller-controlled demo identity remain limitations. Three dependency audit entries are accepted only for the local prototype under ADR-012; [M1 security review](milestone-1-review.md) retains the dependency analysis.
+
+## Candidate acceptance and integration follow-up
+
+ADR-013 records explicit candidate acceptance of demo authentication, single-role identities, last-write-wins same-version editing, limited concurrent-decision test coverage, and application-level audit immutability for the exercise only. These are not production-ready guarantees. The [review's deferred integration checks](milestone-2-review.md#candidate-acceptance-and-deferred-integration-checks) preserve the exact $14,000-to-$800 director-return scenario, mixed-decision concurrency and simultaneous-edit/edit-submission cases for final integration testing; they have not been validated as exact scenarios yet.

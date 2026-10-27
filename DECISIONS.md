@@ -1,6 +1,6 @@
 # Riverbend Command — Engineering Decision Log
 
-Status: Approved planning baseline; Milestone 1 implemented; engineering review recorded; candidate approved for commit | 2026-10-26
+Status: Milestone 1 committed; Milestone 2 approved for commit | 2026-10-26
 
 ## Source and constraints
 - DH Pace fictional Riverbend Supply Co. AI-Assisted Build Exercise: ~4 focused hours; working UI, API, DB, tests; README, docs/requirements.md, docs/design.md, AI-USAGE.md, and project-level AI guidance file.
@@ -68,7 +68,7 @@ Rationale: preserves compliance without inventing an alternate approval delegati
 Any agent-introduced material design change gets a new ADR or explicit amendment with user approval. Never silently mark an implementation-generated suggestion as candidate decision. Record real rationale, prompts, and corrections.
 
 ## ADR-006 — Resource-oriented workflow endpoints (ACCEPTED — candidate prompt 2026-10-26)
-Decision: Use `POST /api/requests/:id/submissions` and `POST /api/requests/:id/approvals`. Approval bodies carry a validated decision type.
+Decision: Use `POST /api/requests/:id/submissions` and `POST /api/requests/:id/approvals`. Approval bodies carry a validated decision type. Candidate Milestone 2 instruction (2026-10-26) specifies `APPROVED`, `REJECTED`, `CHANGES_REQUESTED`; these are the implemented values, replacing the earlier design sketch verbs.
 Alternative: Separate action endpoints for submit, approve, reject, and request changes.
 Rationale: Candidate explicitly selected resource-oriented endpoints in FIRST_CODEX_PROMPT.md.
 Traceability: The existing collaboration contract was relabeled ADR-011 without changing its content to resolve the requested ADR number collision.
@@ -81,3 +81,12 @@ Decision: Accept the three remaining documented high npm audit entries (`deepmer
 Basis: Candidate reviewed the engineering validation report and dependency analysis after the non-breaking Prisma/Client 6.19.3 patch. The entries derive from deepmerge-ts in Prisma's configuration/tooling chain; no execution path through the current submission API was identified. The optional CLI peer remains present in npm's production dependency graph; acceptance does not mean the dependency is fixed or universally safe.
 Limits: This acceptance explicitly does not extend to production deployment. Reassess before deployment, introducing untrusted configuration, or changing code/dependencies in ways that affect reachability. A breaking upgrade or override requires its own review and validation; none is authorized here.
 Traceability: See `docs/milestone-1-review.md` for package paths, advisory sources, mitigation analysis and actual test results. Candidate authorized the specified Milestone 1 commit and explicitly deferred Milestone 2.
+
+## Milestone 2 implementation trace — 2026-10-26 (no new architecture ADR)
+Candidate authorized backend workflow/authorization/revisions/read endpoints and tests, with no frontend or automatic commit. Implemented accepted ADR-003/005/008 with immutable submitted snapshots, a stage decision field, transactional state/audit changes and fresh routes per version. This additive persistence work preserves M1 data; it does not change approved routing/revision policy. Query scopes implement own requests plus active assigned queue, with finance read-all. See `docs/design.md` and `docs/milestone-2-review.md` for mechanics, validation and candid limits. Candidate subsequently accepted Milestone 2 under ADR-013.
+
+## ADR-013 — Milestone 2 prototype limitations (ACCEPTED — candidate 2026-10-26)
+Decision: Approve Milestone 2 for commit with demo authentication, single-role demo identities, last-write-wins simultaneous edits to the same editable request, limited concurrent-decision test coverage, and application-level audit immutability rather than database-administrator tamper resistance.
+Basis: Candidate reviewed the engineering walkthrough and explicitly accepted these limitations for the local, time-boxed exercise only. This is not production-ready identity, concurrency or audit protection. ADR-012's separate dependency-risk limits remain unchanged.
+Follow-up: Preserve the exact $14,000 → manager approval → director return → $800 → resubmit → manager-only approval scenario, conflicting-decision concurrency, and simultaneous-edit testing as pending final integration checks. Existing tests do not establish those exact combined/concurrent scenarios. No stronger edit protection or production guarantee is implied by acceptance.
+Scope: Candidate authorized `feat: implement approval workflow and revision history`; no Milestone 3 work is authorized by this decision.

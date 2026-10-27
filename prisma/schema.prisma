@@ -32,6 +32,7 @@ model PurchaseRequest {
   updatedAt DateTime @updatedAt
   stages ApprovalStage[] @relation("RequestStages")
   events AuditEvent[]
+  revisions PurchaseRevision[]
 }
 model ApprovalStage {
   id String @id @default(cuid())
@@ -47,6 +48,7 @@ model ApprovalStage {
   activatedAt DateTime?
   decidedAt DateTime?
   decisionComment String?
+  decision String?
   @@unique([requestId, requestVersion, ordinal])
 }
 model AuditEvent {
@@ -61,4 +63,15 @@ model AuditEvent {
   nextState String
   details String
   occurredAt DateTime @default(now())
+}
+
+model PurchaseRevision {
+  requestId String
+  request PurchaseRequest @relation(fields: [requestId], references: [id])
+  version Int
+  vendor String
+  amountCents Int
+  reason String
+  submittedAt DateTime
+  @@id([requestId, version])
 }

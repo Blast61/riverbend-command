@@ -50,3 +50,8 @@ Production sign-in/Entra integration, notifications, actual payments, escalation
 
 ## Milestone 1 verification status — 2026-10-26
 Submission/version-1 routing and initial audit are implemented and tested, including all four specified dollar boundaries. HTTP payload identity injection is rejected; finance submission is denied. API input is integer cents, bounded to 2,147,483,647 by Prisma Int; dollar presentation awaits the UI. Approval actions, revisions, role-scoped reads/search and aging remain unimplemented. This is not full MVP acceptance. Details: [engineering review](milestone-1-review.md).
+
+## Milestone 2 verification status — 2026-10-26
+Backend sequential decisions, owner-only returned/draft edits, fresh-version resubmission, immutable submitted snapshots, stage/audit preservation, role-scoped retrieval and validated search/status/vendor/current-approver filters are implemented. Decision bodies use `APPROVED`, `REJECTED`, `CHANGES_REQUESTED` per candidate instruction; the latter two require a trimmed nonblank comment. Edits/resubmissions carry expected `version`, approvals carry current `stageId`. Only purchase fields can be patched. Existing direct creation submits immediately; no draft-creation endpoint added.
+
+Own requests are readable regardless of role; approver roles additionally see their current assigned pending queue, and finance-only users see all. Former/future assignees have no extra detail access. Pending-stage delay and self-assignment flags are API fields; their UI/filter remains future work. Full frontend acceptance and candidate review remain pending. Actual checks and limitations: [Milestone 2 review](milestone-2-review.md).

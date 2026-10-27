@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { PrismaClient } from '@prisma/client';
@@ -7,21 +7,16 @@ import { beforeAll, afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { createApp } from '../src/app.js';
 import { seedUsers } from '../../prisma/demo-users.js';
 import { route } from '../src/policy.js';
+import { applyMigrations, clearRequests } from './database.js';
 const dir = mkdtempSync(join(tmpdir(), 'riverbend-test-'));
 const db = new PrismaClient({ datasourceUrl: `file:${join(dir, 'test.db')}` });
 const app = createApp(db);
 const body = { vendor: 'Synthetic Supply', amountCents: 1400000, reason: 'Demo replacement equipment' };
 beforeAll(async () => {
-  const sql = readFileSync('prisma/migrations/202610260001_initial/migration.sql', 'utf8');
-  for (const statement of sql.split(';').map(s => s.trim()).filter(Boolean)) await db.$executeRawUnsafe(statement);
+  await applyMigrations(db);
   await seedUsers(db);
 });
-beforeEach(async () => {
-  await db.purchaseRequest.updateMany({ data: { activeStageId: null } });
-  await db.auditEvent.deleteMany();
-  await db.approvalStage.deleteMany();
-  await db.purchaseRequest.deleteMany();
-});
+beforeEach(async () => { await clearRequests(db); });
 afterAll(async () => { await db.$disconnect(); rmSync(dir, { recursive: true, force: true }); });
 describe('first submission slice', () => {
   it.each([
