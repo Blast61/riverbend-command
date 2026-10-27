@@ -58,3 +58,8 @@ Own requests are readable regardless of role; approver roles additionally see th
 
 ## Milestone 3 status — 2026-10-26
 React/Material UI workspace implements requester, assigned-approver and finance navigation, create/edit/resubmit/decision forms, real-data summaries and filters, and contextual persisted timeline/revision/audit detail. Server-derived action flags guide UI controls while backend enforces permissions. Basic real-browser role/refresh/return/resubmit/decision flows were checked; actual results and accessibility/browser caveats are in [Milestone 3 review](milestone-3-review.md). Formal final integration cases under ADR-013 remain pending; no Milestone 4 work or production readiness claimed.
+
+
+## Final requirements audit — Milestone 4
+
+The [requirements traceability table](milestone-4-submission-review.md#requirements-traceability) maps US-01–US-11 to implementation and executed verification. All core MVP stories have supporting evidence; this is exercise-level acceptance, not production readiness. Candidate independently reported expected primary-workflow behavior during M3 UAT. M4 adds the exact $14,000/director-return/$800 lifecycle, conflicting-decision and same-version edit regressions (93 total passing tests). Existing business assumptions and out-of-scope items remain unchanged; edit/resubmission races, broader concurrency/load and formal accessibility testing remain deferred.

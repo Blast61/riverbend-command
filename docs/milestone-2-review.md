@@ -52,3 +52,8 @@ Preserve these gaps for the final integration-testing milestone; they are not co
 - Simultaneous same-version edits and edit/resubmission interactions. Confirm overlapping-field last-write-wins and audit behavior without claiming stale-form prevention. Expected submitted version does not change on patches and does not protect against stale content within an editable version.
 
 SQLite contention can cause failures; only selected Prisma transaction codes map to 409, while other unexpected errors return 500. No guarantee that one request always succeeds under every load/failure condition is claimed.
+
+
+## Milestone 4 follow-up (supersedes deferred-test status above)
+
+The exact lifecycle, competing approval/rejection, stale same-version form overwrite and two overlapping same-version patches are now covered by four executed regressions in `server/tests/workflow.test.ts`. The final suite passes 93/93; see [submission review](milestone-4-submission-review.md) for scope and results. Edit/resubmission interaction, multi-process contention and load/crash recovery remain untested. Historical M2 results above are unchanged; this is no stronger production concurrency guarantee or change to ADR-013.

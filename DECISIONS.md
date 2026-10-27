@@ -1,6 +1,6 @@
 # Riverbend Command — Engineering Decision Log
 
-Status: Milestones 1–2 committed; Milestone 3 primary-workflow UAT accepted; commit authorized after label correction and validation | 2026-10-26
+Status: Milestones 1–3 committed; Milestone 4 verification complete, final review pending | 2026-10-26
 
 ## Source and constraints
 - DH Pace fictional Riverbend Supply Co. AI-Assisted Build Exercise: ~4 focused hours; working UI, API, DB, tests; README, docs/requirements.md, docs/design.md, AI-USAGE.md, and project-level AI guidance file.
@@ -99,3 +99,8 @@ Limits: Demo identity and earlier prototype limitations remain. No hosting, prod
 
 ## Milestone 3 acceptance — 2026-10-26 (no new architecture ADR)
 Candidate personally tested submission, approval routing, requests for changes, resubmission, role switching, finance visibility and audit history; observed functionality met expectations. Candidate requested a narrow Active user label/notch correction and authorized the Milestone 3 commit conditional on successful final validation. ADR-012/013 limitations remain unchanged; exact deferred automated integration/concurrency cases are not closed by this report. Milestone 4 is not authorized.
+
+
+## Milestone 4 verification trace — 2026-10-26 (no new architecture ADR)
+
+Candidate authorized finalization/testing/documentation only, without commit/push/deploy. Added exact lifecycle, conflicting approve/reject and same-version edit regression evidence. ADR-013's requested follow-up cases are partially closed; edit/submission interaction and broader independent-process/load coverage remain deferred. No change to accepted last-write-wins, identity, audit or dependency-risk decisions. Final review records actual bounds of demonstrated behavior.

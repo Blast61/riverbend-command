@@ -346,3 +346,99 @@ describe('read scopes, queries and identity', () => {
     expect((await request(app).patch('/api/audit-events/anything').set('X-Demo-User-Id', 'finance').send({})).status).toBe(404);
   });
 });
+
+
+describe('Milestone 4 integration regressions', () => {
+  it('completes the exact $14,000 director-return to $800 lifecycle with accessible preserved history', async () => {
+    const original = await create(1400000);
+    const first = await approve(original.id, original.activeStageId);
+    expect(first.status).toBe(201);
+    expect(first.body.activeStage.assigneeId).toBe('director');
+    const returned = await approve(original.id, first.body.activeStageId, 'director', 'CHANGES_REQUESTED', 'Reduce the purchase scope');
+    expect(returned.status).toBe(201);
+    expect(returned.body.status).toBe('CHANGES_REQUESTED');
+    const previousStages = returned.body.stages;
+    const previousEvents = returned.body.events;
+    expect((await patch(original.id, 'employee', { version: 1, amountCents: 80000 })).status).toBe(200);
+    const submitted = await post(`/api/requests/${original.id}/submissions`, 'employee', { version: 1 });
+    expect(submitted.status).toBe(201);
+    expect(submitted.body).toMatchObject({ version: 2, amountCents: 80000, status: 'PENDING_APPROVAL' });
+    expect(submitted.body.revisions).toHaveLength(2);
+    expect(submitted.body.revisions[0]).toEqual(original.revisions[0]);
+    expect(submitted.body.revisions[1]).toMatchObject({ version: 2, amountCents: 80000 });
+    expect(submitted.body.stages.filter((s: { requestVersion: number }) => s.requestVersion === 1)).toEqual(previousStages);
+    const freshStages = submitted.body.stages.filter((s: { requestVersion: number }) => s.requestVersion === 2);
+    expect(freshStages).toHaveLength(1);
+    expect(freshStages[0]).toMatchObject({ roleRequired: 'MANAGER', assigneeId: 'manager', status: 'PENDING', decision: null });
+    expect(freshStages[0].id).not.toBe(original.activeStageId);
+    expect((await approve(original.id, original.activeStageId)).status).toBe(409);
+    const final = await approve(original.id, submitted.body.activeStageId);
+    expect(final.status).toBe(201);
+    expect(final.body).toMatchObject({ version: 2, status: 'APPROVED', activeStageId: null });
+    for (const actor of ['employee', 'finance']) {
+      const detail = await get(`/api/requests/${original.id}`, actor);
+      expect(detail.status).toBe(200);
+      expect(detail.body.revisions).toEqual(submitted.body.revisions);
+      expect(detail.body.stages.filter((s: { requestVersion: number }) => s.requestVersion === 1)).toEqual(previousStages);
+      expect(detail.body.events.slice(0, previousEvents.length)).toEqual(previousEvents);
+      expect(detail.body.events.map((e: { action: string; actorId: string; version: number }) => [e.action, e.actorId, e.version])).toEqual([
+        ['SUBMITTED', 'employee', 1], ['APPROVED', 'manager', 1], ['CHANGES_REQUESTED', 'director', 1],
+        ['EDITED', 'employee', 1], ['RESUBMITTED', 'employee', 2], ['APPROVED', 'manager', 2],
+      ]);
+      expect(JSON.parse(detail.body.events[2].details).comment).toBe('Reduce the purchase scope');
+    }
+    expect(await db.auditEvent.count({ where: { requestId: original.id } })).toBe(6);
+  });
+
+  it('persists only one of competing approval and rejection decisions on the same stage', async () => {
+    const row = await create(80000);
+    const attempts = await Promise.all([
+      approve(row.id, row.activeStageId, 'manager', 'APPROVED'),
+      approve(row.id, row.activeStageId, 'manager', 'REJECTED', 'Decline synthetic purchase'),
+    ]);
+    expect(attempts.map(r => r.status).sort()).toEqual([201, 409]);
+    const winner = attempts.find(r => r.status === 201)!;
+    const saved = await get(`/api/requests/${row.id}`, 'finance');
+    expect(saved.status).toBe(200);
+    expect(saved.body.status).toBe(winner.body.status);
+    expect(saved.body.activeStageId).toBeNull();
+    expect(saved.body.stages).toHaveLength(1);
+    expect(saved.body.stages[0].decision).toBe(winner.body.status);
+    expect(saved.body.stages[0].status).toBe(winner.body.status === 'APPROVED' ? 'APPROVED' : 'SUPERSEDED');
+    expect(saved.body.events).toHaveLength(2);
+    expect(saved.body.events[1].action).toBe(winner.body.status);
+    expect(JSON.parse(saved.body.events[1].details).stageId).toBe(row.activeStageId);
+    expect((await approve(row.id, row.activeStageId)).status).toBe(409);
+    expect(await db.auditEvent.count()).toBe(2);
+  });
+
+  it('accepts an older same-version edit after another save and audits last-write-wins', async () => {
+    const row = await create(80000);
+    expect((await approve(row.id, row.activeStageId, 'manager', 'CHANGES_REQUESTED', 'Revise reason')).status).toBe(201);
+    const formA = (await get(`/api/requests/${row.id}`, 'employee')).body;
+    const formB = (await get(`/api/requests/${row.id}`, 'employee')).body;
+    expect((await patch(row.id, 'employee', { version: formA.version, reason: 'First editor save' })).status).toBe(200);
+    expect((await patch(row.id, 'employee', { version: formB.version, reason: 'Older form saved last' })).status).toBe(200);
+    const saved = (await get(`/api/requests/${row.id}`, 'employee')).body;
+    expect(saved).toMatchObject({ reason: 'Older form saved last', version: 1, status: 'CHANGES_REQUESTED' });
+    expect(saved.revisions[0].reason).toBe(purchase.reason);
+    const edits = saved.events.filter((e: { action: string }) => e.action === 'EDITED');
+    expect(edits).toHaveLength(2);
+    expect(JSON.parse(edits[1].details)).toMatchObject({ before: { reason: 'First editor save' }, changes: { reason: 'Older form saved last' } });
+  });
+
+  it('serializes two overlapping same-version patches and preserves both successful edit audits', async () => {
+    const row = await create(80000);
+    expect((await approve(row.id, row.activeStageId, 'manager', 'CHANGES_REQUESTED', 'Revise reason')).status).toBe(201);
+    const reasons = ['Concurrent editor A', 'Concurrent editor B'];
+    const results = await Promise.all(reasons.map(reason => patch(row.id, 'employee', { version: 1, reason })));
+    expect(results.map(r => r.status)).toEqual([200, 200]);
+    const saved = (await get(`/api/requests/${row.id}`, 'employee')).body;
+    const edits = saved.events.filter((e: { action: string }) => e.action === 'EDITED').map((e: { details: string }) => JSON.parse(e.details));
+    expect(edits).toHaveLength(2);
+    expect(edits.map((e: { changes: { reason: string } }) => e.changes.reason).sort()).toEqual([...reasons].sort());
+    expect(edits[1].before.reason).toBe(edits[0].changes.reason);
+    expect(saved).toMatchObject({ reason: edits[1].changes.reason, version: 1, status: 'CHANGES_REQUESTED' });
+    expect(saved.revisions[0].reason).toBe(purchase.reason);
+  });
+});

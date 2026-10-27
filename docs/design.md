@@ -71,7 +71,7 @@ App-level append-only audit/snapshots are not database-admin-proof. Cross-row st
 
 ## Candidate acceptance and integration follow-up
 
-ADR-013 records explicit candidate acceptance of demo authentication, single-role identities, last-write-wins same-version editing, limited concurrent-decision test coverage, and application-level audit immutability for the exercise only. These are not production-ready guarantees. The [review's deferred integration checks](milestone-2-review.md#candidate-acceptance-and-deferred-integration-checks) preserve the exact $14,000-to-$800 director-return scenario, mixed-decision concurrency and simultaneous-edit/edit-submission cases for final integration testing; they have not been validated as exact scenarios yet.
+ADR-013 records explicit candidate acceptance of demo authentication, single-role identities, last-write-wins same-version editing, limited concurrent-decision test coverage, and application-level audit immutability for the exercise only. These are not production-ready guarantees. The [review's deferred integration checks](milestone-2-review.md#candidate-acceptance-and-deferred-integration-checks) preserve the exact $14,000-to-$800 director-return scenario, mixed-decision concurrency and simultaneous-edit/edit-submission cases for final integration testing; Milestone 4 now verifies the exact lifecycle and same-client conflicting-decision/overlapping-edit cases; edit/submission races and multi-process/load scenarios remain deferred (see final submission review).
 
 ## Frontend organization and additive API metadata — Milestone 3
 
@@ -83,8 +83,13 @@ Views select own/assigned/company subsets of the real API-scoped dataset. Metric
 
 Only selected demo user ID is stored locally; selected request ID is in the URL and is re-authorized/refetched on refresh. Role changes clear old context and abort reads. Edit forms snapshot the persisted version; save and resubmit are separate explicit operations. Approval dialogs send persisted activeStageId and required explanation. Backend errors remain visible, and stale workflows require reload rather than automatic retry. Existing drafts can be edited if returned by the API; creation still submits directly.
 
-Responsive sidebar, scrollable queue, contextual Material UI drawer/dialogs, labeled controls, keyboard-accessible buttons, text+color status indicators, semantic headings, skip link and reduced-motion treatment are included. Actual layout/browser checks and accessibility warnings are documented in [Milestone 3 review](milestone-3-review.md); no formal accessibility certification claimed. ADR-013's deferred final integration cases remain pending.
+Responsive sidebar, scrollable queue, contextual Material UI drawer/dialogs, labeled controls, keyboard-accessible buttons, text+color status indicators, semantic headings, skip link and reduced-motion treatment are included. Actual layout/browser checks and accessibility warnings are documented in [Milestone 3 review](milestone-3-review.md); no formal accessibility certification claimed. Milestone 4's final review distinguishes newly verified integration cases from remaining edit/submission and broader concurrency gaps.
 
 ### Overlay focus lifecycle correction
 
 `overlayFocus.ts` captures/blurs the active trigger before a form/drawer opens, then restores it after unmount/exit. Restoration never moves focus behind a still-active parent overlay; disconnected triggers fall back to the workspace. Cleanup checks the removed node to avoid StrictMode rehearsal cleanup stealing focus. Material UI focus trapping remains enabled. Three targeted tests and bounded native Chrome open/close checks support this correction; it does not change backend behavior or establish full accessibility compliance. Candidate walkthrough: [UAT worksheet](milestone-3-uat.md).
+
+
+## Final verification boundary — Milestone 4
+
+No runtime implementation, schema or API contract changed. Four added HTTP/SQLite regressions in `server/tests/workflow.test.ts` verify the exact $14,000 → manager approval → director return → $800 → version 2 → manager-only final approval story with preserved snapshots/stages/all six audit events; competing approval versus rejection; stale same-version overwrite; and two overlapping successful patches with both audits. Same app/client test execution does not establish independent-process or heavy-load guarantees. No optimistic edit locking added. Full evidence and setup verification: [submission review](milestone-4-submission-review.md).

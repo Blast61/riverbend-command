@@ -37,6 +37,8 @@ Do not generate fake A/B choices. If evidence clearly favors one solution, justi
 - Do not use paid services, real procurement data, or confidential materials.
 - Maintain clean git diffs and descriptive commits when practical.
 
+The approximately four-hour scope is a planning constraint. Work occurred across multiple focused sessions; active time was not measured and elapsed timestamps do not establish a four-hour total.
+
 ## Four-hour scope policy
 **Must work:** submission, amount routing, manager/director/VP actions, mandatory rejection rationale, return and resubmit, audit history, read-only finance, requester/approver screens, status/current owner filters, essential automated tests.
 **Nice to have:** aging indicator, polished timeline, dashboard metrics.
