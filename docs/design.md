@@ -31,10 +31,10 @@ No general edit route for submitted requests. Do not overwrite historical data w
 - `POST /api/requests` create draft or submit directly; document behavior in README.
 - `GET /api/requests/:id` request, versioned stages, audit trail; scoped by identity.
 - `PATCH /api/requests/:id` edit draft or CHANGES_REQUESTED as owner.
-- `POST /api/requests/:id/submit` initial submit / resubmit.
-- `POST /api/requests/:id/approve` active approver only.
-- `POST /api/requests/:id/reject` requires reason.
-- `POST /api/requests/:id/request-changes` requires comment.
+- `POST /api/requests/:id/submissions` initial submit / resubmit.
+- `POST /api/requests/:id/approvals` with validated `decision` (`APPROVE`, `REJECT`, `REQUEST_CHANGES`), `stageId`, and conditional required `comment`.
+
+First slice: `POST /api/requests` submits directly, creating version 1 and its route atomically. Draft editing, repeat submissions, and approval actions follow in the next slice; their endpoints are not claimed as implemented yet.
 
 Demo user identity should be injected through one adapter (e.g., `X-Demo-User-Id` header only in demo builds). Make clear that a user-controlled header cannot be used as production authentication. All mutation endpoints verify permissions server-side.
 
@@ -46,3 +46,6 @@ Priority: routing boundaries, manager→director→VP progression, no out-of-ord
 
 ## Risks and limits
 MVP not production auth, data-retention system, delegation workflow, or enterprise security boundary. App-level append-only audit is not database-admin-proof. Enforce concurrency safety for double actions where feasible with transactions and conditional status/version checks. If implementation constraints require a simplified concurrency story, document honestly.
+
+## Milestone 1 review
+The identity adapter resolves a database actor; the domain service accepts that actor explicitly and sets requester/audit identity itself. Future Entra integration must validate tokens and map external identity to this local actor; neither is implemented. Current single-role storage covers demo personas, not independent multi-role grants. Submission writes and audit share one transaction; tests force both late-stage and audit failures to verify rollback. See [review](milestone-1-review.md) for security/dependency findings and scope limits.

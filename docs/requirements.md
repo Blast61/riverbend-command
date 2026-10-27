@@ -47,3 +47,6 @@ Confirm true VP threshold and exact $1,000 rule; out-of-office delegation policy
 
 ## Out of scope (MVP)
 Production sign-in/Entra integration, notifications, actual payments, escalation delegation, upload attachments, exports, SLA calendar, production hosting, enterprise tamper-proof audit controls.
+
+## Milestone 1 verification status — 2026-10-26
+Submission/version-1 routing and initial audit are implemented and tested, including all four specified dollar boundaries. HTTP payload identity injection is rejected; finance submission is denied. API input is integer cents, bounded to 2,147,483,647 by Prisma Int; dollar presentation awaits the UI. Approval actions, revisions, role-scoped reads/search and aging remain unimplemented. This is not full MVP acceptance. Details: [engineering review](milestone-1-review.md).

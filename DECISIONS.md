@@ -1,6 +1,6 @@
 # Riverbend Command — Engineering Decision Log
 
-Status: Approved planning baseline; implementation not yet begun | 2026-10-26
+Status: Approved planning baseline; Milestone 1 implemented; engineering review recorded; candidate approved for commit | 2026-10-26
 
 ## Source and constraints
 - DH Pace fictional Riverbend Supply Co. AI-Assisted Build Exercise: ~4 focused hours; working UI, API, DB, tests; README, docs/requirements.md, docs/design.md, AI-USAGE.md, and project-level AI guidance file.
@@ -38,7 +38,7 @@ Alternatives: simple mutable last-updated fields; full event sourcing.
 Rationale: reliable reconstruction without overbuilding.
 Tradeoff: cannot claim database-admin-level tamper-proofing.
 
-## ADR-006 — AI collaboration contract (ACCEPTED — candidate reviewed 2026-10-26)
+## ADR-011 — AI collaboration contract (ACCEPTED — candidate reviewed 2026-10-26)
 Decision: Codex may implement routine local code details autonomously. For material decisions, it must: state a recommendation; compare 2+ genuinely defensible approaches only when tradeoffs are material; give evidence-based selection criteria; explain implications; mark reversibility/risk; and await candidate's explicit selection. If one approach dominates, say so and explain why—no fake options. The candidate may also propose a third option.
 Require a running decision log and representative prompt/correction log for AI-USAGE.md. No invented failures or exaggerated human coding claims.
 
@@ -66,3 +66,18 @@ Rationale: preserves compliance without inventing an alternate approval delegati
 
 ## Decision change protocol
 Any agent-introduced material design change gets a new ADR or explicit amendment with user approval. Never silently mark an implementation-generated suggestion as candidate decision. Record real rationale, prompts, and corrections.
+
+## ADR-006 — Resource-oriented workflow endpoints (ACCEPTED — candidate prompt 2026-10-26)
+Decision: Use `POST /api/requests/:id/submissions` and `POST /api/requests/:id/approvals`. Approval bodies carry a validated decision type.
+Alternative: Separate action endpoints for submit, approve, reject, and request changes.
+Rationale: Candidate explicitly selected resource-oriented endpoints in FIRST_CODEX_PROMPT.md.
+Traceability: The existing collaboration contract was relabeled ADR-011 without changing its content to resolve the requested ADR number collision.
+
+## Milestone 1 review note — 2026-10-26 (not a new ADR)
+Applied routine, non-breaking Prisma/Client patch 6.19.0 → 6.19.3 after registry metadata identified patched Effect in its config dependency. No business rule or architecture change. Residual deepmerge risk and recommendation to defer a breaking migration are recorded in `docs/milestone-1-review.md`; candidate-specific risk acceptance has not been asserted. No forced fixes, staging or commit authorized by this review.
+
+## ADR-012 — Milestone 1 residual dependency risk (ACCEPTED — candidate 2026-10-26)
+Decision: Accept the three remaining documented high npm audit entries (`deepmerge-ts`, `@prisma/config`, and `prisma`) for this local, time-boxed synthetic prototype only, and approve Milestone 1 for commit.
+Basis: Candidate reviewed the engineering validation report and dependency analysis after the non-breaking Prisma/Client 6.19.3 patch. The entries derive from deepmerge-ts in Prisma's configuration/tooling chain; no execution path through the current submission API was identified. The optional CLI peer remains present in npm's production dependency graph; acceptance does not mean the dependency is fixed or universally safe.
+Limits: This acceptance explicitly does not extend to production deployment. Reassess before deployment, introducing untrusted configuration, or changing code/dependencies in ways that affect reachability. A breaking upgrade or override requires its own review and validation; none is authorized here.
+Traceability: See `docs/milestone-1-review.md` for package paths, advisory sources, mitigation analysis and actual test results. Candidate authorized the specified Milestone 1 commit and explicitly deferred Milestone 2.

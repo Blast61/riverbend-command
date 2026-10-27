@@ -1,0 +1,64 @@
+generator client {
+  provider = "prisma-client-js"
+}
+datasource db {
+  provider = "sqlite"
+  url = env("DATABASE_URL")
+}
+model User {
+  id String @id
+  name String
+  department String
+  role String
+  managerId String?
+  manager User? @relation("Reporting", fields: [managerId], references: [id])
+  reports User[] @relation("Reporting")
+  requests PurchaseRequest[]
+  stages ApprovalStage[]
+  events AuditEvent[]
+}
+model PurchaseRequest {
+  id String @id @default(cuid())
+  requesterId String
+  requester User @relation(fields: [requesterId], references: [id])
+  vendor String
+  amountCents Int
+  reason String
+  status String
+  version Int
+  activeStageId String? @unique
+  activeStage ApprovalStage? @relation("ActiveStage", fields: [activeStageId], references: [id])
+  submittedAt DateTime
+  updatedAt DateTime @updatedAt
+  stages ApprovalStage[] @relation("RequestStages")
+  events AuditEvent[]
+}
+model ApprovalStage {
+  id String @id @default(cuid())
+  requestId String
+  request PurchaseRequest @relation("RequestStages", fields: [requestId], references: [id])
+  activeFor PurchaseRequest? @relation("ActiveStage")
+  requestVersion Int
+  ordinal Int
+  roleRequired String
+  assigneeId String
+  assignee User @relation(fields: [assigneeId], references: [id])
+  status String
+  activatedAt DateTime?
+  decidedAt DateTime?
+  decisionComment String?
+  @@unique([requestId, requestVersion, ordinal])
+}
+model AuditEvent {
+  id String @id @default(cuid())
+  requestId String
+  request PurchaseRequest @relation(fields: [requestId], references: [id])
+  version Int
+  actorId String
+  actor User @relation(fields: [actorId], references: [id])
+  action String
+  priorState String?
+  nextState String
+  details String
+  occurredAt DateTime @default(now())
+}
