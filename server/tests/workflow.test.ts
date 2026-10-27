@@ -326,6 +326,17 @@ describe('read scopes, queries and identity', () => {
     expect((await post('/api/requests', 'employee', { ...purchase, reason: 'x'.repeat(17000) })).status).toBe(413);
     expect(await db.purchaseRequest.count()).toBe(0);
   });
+  it('returns server-derived action flags for owner, assigned approver and finance', async () => {
+    const row = await create();
+    expect(row.permissions).toEqual({ canEdit: false, canResubmit: false, canDecide: false });
+    expect((await get(`/api/requests/${row.id}`, 'manager')).body.permissions.canDecide).toBe(true);
+    expect((await get(`/api/requests/${row.id}`, 'finance')).body.permissions).toEqual({ canEdit: false, canResubmit: false, canDecide: false });
+    const decision = await approve(row.id, row.activeStageId, 'manager', 'CHANGES_REQUESTED', 'Clarify');
+    expect(decision.body.permissions.canDecide).toBe(false);
+    expect((await get(`/api/requests/${row.id}`, 'employee')).body.permissions).toEqual({ canEdit: true, canResubmit: true, canDecide: false });
+    const users = await get('/api/demo-users', 'finance');
+    expect(users.body.find((u: { id: string }) => u.id === 'finance').permissions).toEqual({ canCreate: false, canReview: false, canViewAll: true });
+  });
   it('returns 404 for missing resources and exposes no audit mutation route', async () => {
     expect((await get('/api/requests/missing', 'finance')).status).toBe(404);
     expect((await approve('missing', 'missing')).status).toBe(404);

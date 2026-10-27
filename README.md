@@ -1,8 +1,8 @@
 # Riverbend Command
 
-Synthetic purchase-exception approval demo. **Status: Milestone 2 backend implemented, verified and candidate-approved for the local exercise. UI is not implemented.**
+Synthetic purchase-exception approval demo. **Status: Milestone 3 frontend implemented; candidate review pending. Local synthetic prototype only.**
 
-Implemented: SQLite migrations, five seeded identities, direct submission, sequential decisions, owner-only editing/resubmission, immutable revision snapshots, role-scoped reads/search and transactional audit. No frontend work is included.
+Implemented: SQLite migrations, five seeded identities, direct submission, sequential decisions, owner-only editing/resubmission, immutable revision snapshots, role-scoped reads/search and transactional audit. React/Material UI workspace connects to the real API with requester, approver and finance experiences.
 
 ## Local run
 
@@ -10,15 +10,23 @@ Node 22.23.4 and npm 10.9.9 were used for verification.
 
 ```sh
 npm ci
-cp .env.example .env
+test -f .env || cp .env.example .env
 npm run db:generate
-touch prisma/dev.db
+test -f prisma/dev.db || touch prisma/dev.db
 npm run db:migrate
 npm run db:seed
 npm run start:server
 ```
 
-Prisma loads `.env` for database commands and client initialization. API defaults to `127.0.0.1:3001`; set `PORT` in the shell to override. `touch` initializes an empty SQLite file before migration. Use `npm run dev:server` for watch mode.
+In a second terminal:
+
+```sh
+npm run dev:client
+```
+
+Open **http://127.0.0.1:5173/**. Vite proxies API calls to port 3001. Use the demo selector to change personas. Browser refresh reloads persisted requests; only demo selection is stored locally. Both processes must be running.
+
+Prisma loads `.env` for database commands and client initialization. API defaults to `127.0.0.1:3001`; set `PORT` in the shell to override (the Vite proxy must then be updated from 3001 as well). `touch` initializes an empty SQLite file before migration. Use `npm run dev:server` for watch mode.
 
 ```sh
 curl http://127.0.0.1:3001/api/demo-users
@@ -28,6 +36,8 @@ curl -i http://127.0.0.1:3001/api/requests \
   -d '{"vendor":"Synthetic Supply","amountCents":1400000,"reason":"Demo replacement equipment"}'
 npm run typecheck
 npm test
+npm run test:client
+npm run build
 ```
 
 Tests use an isolated temporary SQLite database, apply the checked-in migrations and remove the test directory afterward. API tests require permission to bind local sockets. This agent environment also required IPC permission for the tsx CLI.
@@ -56,12 +66,22 @@ Existing M1 databases: run `npm run db:migrate` then `npm run db:seed`, without 
 
 ## Verification and limits
 
-60 automated tests pass across three files, including all 19 M1 cases. Coverage includes sequential/final decisions, comments, permissions/self-approval, revisions/rerouting/history, read scopes/filters, stale/duplicate/concurrent actions, failure rollback, and actual fresh/upgrade migration deployment. TypeScript passes. Live workflow walkthrough verified returned revision, all three new approvals, finance/stale-stage denials and preserved history. Detailed commands/results: [Milestone 2 review](docs/milestone-2-review.md).
+**89 automated tests pass** (61 backend, 28 frontend), retaining all 60 Milestone 2 backend cases. Backend/client TypeScript and frontend build pass. Backend coverage includes decisions, permissions, revisions/history, rollback and actual migration deployment. Frontend tests cover role/permission presentation, forms/errors, exact amount conversion, timeline/history, stale reads and filters. Live Chrome checks against the real API verified submit/return/edit/resubmit/approve, rejection comments, refresh persistence, finance read-only controls and responsive basics. Detailed commands, distinctions and limitations: [Milestone 3 review](docs/milestone-3-review.md).
 
 Engineering review patched Prisma/Client to 6.19.3, resolving the Effect advisory. Three high audit entries remain for deepmerge-ts and its Prisma/config parents; npm also includes them through Client's optional CLI peer in production-only audits. Latest audit remains unchanged at those three high entries; no dependencies changed in Milestone 2 and no forced major migration was applied. See the [Milestone 1 review](docs/milestone-1-review.md) for exposure, remediation and actual validation results. Production deployment, SSO, delegation, payments and notifications are out of scope; app-level audit history is not database-admin tamper-proof.
 
 No real business records, secrets or original confidential exercise brief are included. AI authorship and actual verification are recorded in [AI-USAGE.md](AI-USAGE.md).
 
-Same-version editable patches use last-writer-wins; revisions guard changes across submitted versions. Lists are unpaginated for synthetic data. SQLite contention returns 409/reload. API returns delayed/self-assignment flags; frontend/filter work remains pending. Audit and snapshots are append-only through the API, not database-admin-proof.
+Same-version editable patches use last-writer-wins; revisions guard changes across submitted versions. Lists are unpaginated for synthetic data. Selected SQLite/transaction contention errors return 409 requiring reload; unexpected errors can still return 500. API returns delayed/self-assignment flags; the UI displays them and includes an aging filter. Audit and snapshots are append-only through the API, not database-admin-proof.
 
 Candidate accepted the documented identity, single-role, concurrent-edit/test-coverage and app-level audit limitations for this exercise only under ADR-013. Production readiness is not claimed. Exact-scenario and concurrency coverage gaps remain tracked for [final integration testing](docs/milestone-2-review.md#candidate-acceptance-and-deferred-integration-checks).
+
+## Frontend review
+
+Unified workspace: contextual request drawer, current/historical approval timeline, revision snapshots/audit, create/edit/resubmit and decision forms, loading/errors/retry, searchable/filterable queues and API-derived summaries. Finance has no write controls. UI action availability comes from server metadata; server authorization is still enforced. Existing drafts are editable, but no new draft-creation endpoint exists.
+
+Summary metrics describe the selected view before filters; local filters operate only on API-permitted records. Lists remain unpaginated for demo data. Stale workflows need reload; no automatic mutation retries or client routing policy. See [architecture](docs/design.md) and [actual validation/known browser observations](docs/milestone-3-review.md). Full integration cases deferred under ADR-013 remain pending.
+
+Build writes ignored `dist/client`. `npm run preview` serves that build on 4173 with the API proxy; the real API must also run on 3001. Production hosting is not implemented. Build reports a nonfatal >500KB chunk warning. Focused review corrected trigger focus handling and tested Escape/drawer/nested-editor restoration. Fresh observed dialog/drawer cycles had no console messages. The earlier native-input update-depth error remains unreproduced with unknown cause. This is not production accessibility certification.
+
+Candidate completed primary-workflow manual acceptance testing and reported expected behavior for submission, routing, changes requested, resubmission, role switching, finance visibility and audit history. [The UAT record](docs/milestone-3-uat.md) distinguishes this report from automated and Codex browser checks; individual unreported checklist results remain blank. Candidate authorized the Milestone 3 commit after the Active user label correction and successful final validation.

@@ -1,11 +1,11 @@
-import type { Prisma, PrismaClient, User } from '@prisma/client';
+import type { Prisma, PrismaClient, User, PurchaseRequest, ApprovalStage } from '@prisma/client';
 import type { z } from 'zod';
-import { readScope } from './authorization.js';
+import { readScope, requestPermissions } from './authorization.js';
 import { HttpError } from './policy.js';
 import { requestQuery } from './validation.js';
 import { detailInclude } from './workflow-store.js';
-function visibility<T extends { requesterId: string; activeStage: { assigneeId: string; activatedAt: Date | null } | null }>(row: T) {
-  return { ...row,
+export function presentRequest<T extends PurchaseRequest & { activeStage: ApprovalStage | null }>(actor: User, row: T) {
+  return { ...row, permissions: requestPermissions(actor, row),
     blockedAssignment: Boolean(row.activeStage && row.activeStage.assigneeId === row.requesterId),
     delayed: Boolean(row.activeStage?.activatedAt && Date.now() - row.activeStage.activatedAt.getTime() > 72 * 60 * 60 * 1000),
   };
@@ -20,10 +20,10 @@ export async function listRequests(db: PrismaClient, actor: User, raw: z.infer<t
   };
   const rows = await db.purchaseRequest.findMany({ where: { AND: [readScope(actor), filters] },
     include: { activeStage: { include: { assignee: true } } }, orderBy: [{ submittedAt: 'desc' }, { id: 'asc' }] });
-  return rows.map(visibility);
+  return rows.map(row => presentRequest(actor, row));
 }
 export async function getRequest(db: PrismaClient, actor: User, id: string) {
   const row = await db.purchaseRequest.findFirst({ where: { AND: [{ id }, readScope(actor)] }, include: detailInclude });
   if (!row) throw new HttpError(404, 'Request not found');
-  return visibility(row);
+  return presentRequest(actor, row);
 }

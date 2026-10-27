@@ -1,6 +1,6 @@
 # Riverbend Command — Engineering Decision Log
 
-Status: Milestone 1 committed; Milestone 2 approved for commit | 2026-10-26
+Status: Milestones 1–2 committed; Milestone 3 primary-workflow UAT accepted; commit authorized after label correction and validation | 2026-10-26
 
 ## Source and constraints
 - DH Pace fictional Riverbend Supply Co. AI-Assisted Build Exercise: ~4 focused hours; working UI, API, DB, tests; README, docs/requirements.md, docs/design.md, AI-USAGE.md, and project-level AI guidance file.
@@ -90,3 +90,12 @@ Decision: Approve Milestone 2 for commit with demo authentication, single-role d
 Basis: Candidate reviewed the engineering walkthrough and explicitly accepted these limitations for the local, time-boxed exercise only. This is not production-ready identity, concurrency or audit protection. ADR-012's separate dependency-risk limits remain unchanged.
 Follow-up: Preserve the exact $14,000 → manager approval → director return → $800 → resubmit → manager-only approval scenario, conflicting-decision concurrency, and simultaneous-edit testing as pending final integration checks. Existing tests do not establish those exact combined/concurrent scenarios. No stronger edit protection or production guarantee is implied by acceptance.
 Scope: Candidate authorized `feat: implement approval workflow and revision history`; no Milestone 3 work is authorized by this decision.
+
+## ADR-014 — Unified frontend workspace (ACCEPTED — candidate 2026-10-26)
+Decision: A unified React + TypeScript workspace with contextual request-detail panels, rather than independent pages. Material UI provides reusable enterprise components. API communication, business data/state and presentation remain separated. No approval routing or authorization policy is duplicated in React components.
+Basis: Candidate explicitly selected this architecture in the Milestone 3 prompt; implementation follows ADR-007's React/Vite/Material UI stack and retains existing backend behavior.
+Implementation: The API adds per-request available-action flags derived from server authorization/state checks. Client presents these flags while mutations continue enforcing permissions server-side. Dashboard summaries derive from the actor's actual scoped API records and clearly state their scope.
+Limits: Demo identity and earlier prototype limitations remain. No hosting, production authentication or general-purpose workflow editor is introduced.
+
+## Milestone 3 acceptance — 2026-10-26 (no new architecture ADR)
+Candidate personally tested submission, approval routing, requests for changes, resubmission, role switching, finance visibility and audit history; observed functionality met expectations. Candidate requested a narrow Active user label/notch correction and authorized the Milestone 3 commit conditional on successful final validation. ADR-012/013 limitations remain unchanged; exact deferred automated integration/concurrency cases are not closed by this report. Milestone 4 is not authorized.

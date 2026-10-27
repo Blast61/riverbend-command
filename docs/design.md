@@ -2,7 +2,7 @@
 
 ## Architecture and identity
 
-React/Vite + TypeScript + Material UI client (planned) ↔ Node/Express + TypeScript API ↔ SQLite via Prisma. Zod schemas in `server/src/validation.ts` validate strict mutation bodies and list queries. `authorization.ts` owns role/ownership checks and the shared read-scope predicate. Domain services own transitions and transaction boundaries; HTTP handlers resolve identity and call them.
+React/Vite + TypeScript + Material UI client ↔ Node/Express + TypeScript API ↔ SQLite via Prisma. Zod schemas in `server/src/validation.ts` validate strict mutation bodies and list queries. `authorization.ts` owns role/ownership checks and the shared read-scope predicate. Domain services own transitions and transaction boundaries; HTTP handlers resolve identity and call them.
 
 `createApp(db, resolveIdentity)` defaults to the centralized `demoIdentity` adapter. `X-Demo-User-Id` selects a seeded database user; it is **not production authentication**. A future trusted resolver must validate Entra tokens and map tenant/object identity to a local actor; domain services continue accepting the resolved actor. Integration is not implemented. The current single-role field models the five demo personas, not independently assigned multi-role grants.
 
@@ -65,10 +65,26 @@ Automated tests cover routing boundaries, sequential/final decisions, required c
 
 ## UI and limitations
 
-Frontend remains unimplemented in this milestone. Planned UI: demo banner/role switcher, scoped list/search/filters, detail timeline/audit, edit/resubmit and assigned decision controls, aging badge. No delegation, notifications, real payments or production hosting.
+ADR-014 frontend is implemented: unified role-relevant workspace, demo banner/switcher, scoped queue/search/filters, real-data summaries, contextual detail/timeline/audit and forms consuming server action flags. No delegation, notifications, real payments or production hosting.
 
 App-level append-only audit/snapshots are not database-admin-proof. Cross-row state invariants rely on domain transactions rather than arbitrary SQL protection. Single-role users, explicit seeded reporting hierarchy, unpaginated lists and caller-controlled demo identity remain limitations. Three dependency audit entries are accepted only for the local prototype under ADR-012; [M1 security review](milestone-1-review.md) retains the dependency analysis.
 
 ## Candidate acceptance and integration follow-up
 
 ADR-013 records explicit candidate acceptance of demo authentication, single-role identities, last-write-wins same-version editing, limited concurrent-decision test coverage, and application-level audit immutability for the exercise only. These are not production-ready guarantees. The [review's deferred integration checks](milestone-2-review.md#candidate-acceptance-and-deferred-integration-checks) preserve the exact $14,000-to-$800 director-return scenario, mixed-decision concurrency and simultaneous-edit/edit-submission cases for final integration testing; they have not been validated as exact scenarios yet.
+
+## Frontend organization and additive API metadata — Milestone 3
+
+`client/src/api.ts` owns real HTTP requests, identity headers and API error decoding; `types.ts` defines transport shapes; `useWorkspace.ts` loads rows/details and aborts/discards stale responses. React components display data and collect input. Backend remains the policy boundary: `authorization.ts` shares the editable-state guard with mutations and derives request `permissions: {canEdit, canResubmit, canDecide}`. User enumeration adds `permissions: {canCreate, canReview, canViewAll}` for navigation. All request read/mutation responses carry per-actor action flags; they are advisory presentation metadata, never client-issued authorization. Existing mutation checks and transaction bodies remain authoritative.
+
+One root package provides Vite (loopback 5173) with `/api` proxy to loopback 3001; no CORS dependency or backend static-serving change. Build outputs to ignored `dist/client`; optional preview uses loopback 4173 and the same API proxy. Backend and client have separate TypeScript configurations; `npm run typecheck` checks both. Vitest includes existing API/migration tests plus jsdom frontend tests.
+
+Views select own/assigned/company subsets of the real API-scoped dataset. Metrics show pending count/value, returned count and server-delayed count for the view before search filters, and show unavailable markers while loading/on failure. Search includes vendor/full/display ID; status/current-approver/aging filters are local presentation filters over permitted records. This retains current small-data/unpaginated behavior. Current and historical timeline states come from persisted stages/decisions, not client routing calculations. The drawer exposes revision snapshots and chronological audit comments; mutations refresh server data. Forms keep input on failure; no optimistic fake approval state is used.
+
+Only selected demo user ID is stored locally; selected request ID is in the URL and is re-authorized/refetched on refresh. Role changes clear old context and abort reads. Edit forms snapshot the persisted version; save and resubmit are separate explicit operations. Approval dialogs send persisted activeStageId and required explanation. Backend errors remain visible, and stale workflows require reload rather than automatic retry. Existing drafts can be edited if returned by the API; creation still submits directly.
+
+Responsive sidebar, scrollable queue, contextual Material UI drawer/dialogs, labeled controls, keyboard-accessible buttons, text+color status indicators, semantic headings, skip link and reduced-motion treatment are included. Actual layout/browser checks and accessibility warnings are documented in [Milestone 3 review](milestone-3-review.md); no formal accessibility certification claimed. ADR-013's deferred final integration cases remain pending.
+
+### Overlay focus lifecycle correction
+
+`overlayFocus.ts` captures/blurs the active trigger before a form/drawer opens, then restores it after unmount/exit. Restoration never moves focus behind a still-active parent overlay; disconnected triggers fall back to the workspace. Cleanup checks the removed node to avoid StrictMode rehearsal cleanup stealing focus. Material UI focus trapping remains enabled. Three targeted tests and bounded native Chrome open/close checks support this correction; it does not change backend behavior or establish full accessibility compliance. Candidate walkthrough: [UAT worksheet](milestone-3-uat.md).

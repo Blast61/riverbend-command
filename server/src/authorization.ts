@@ -27,3 +27,24 @@ export function readScope(actor: User): Prisma.PurchaseRequestWhereInput {
     } }] : []),
   ] };
 }
+
+export function assertEditable(request: PurchaseRequest, version: number) {
+  if (!['DRAFT', 'CHANGES_REQUESTED'].includes(request.status) || request.version !== version) {
+    throw new HttpError(409, 'Request is not editable at this version');
+  }
+}
+export function userPermissions(actor: User) {
+  return { canCreate: actor.role !== 'FINANCE_VIEWER', canReview: isApprover(actor), canViewAll: actor.role === 'FINANCE_VIEWER' };
+}
+export function requestPermissions(actor: User, request: PurchaseRequest & { activeStage: ApprovalStage | null }) {
+  let canEdit = false;
+  let canDecide = false;
+  try { assertOwner(actor, request); assertEditable(request, request.version); canEdit = true; }
+  catch (error) { if (!(error instanceof HttpError)) throw error; }
+  const stage = request.activeStage;
+  if (request.status === 'PENDING_APPROVAL' && stage?.status === 'PENDING' && stage.requestId === request.id && stage.requestVersion === request.version) {
+    try { assertApprover(actor, request, stage); canDecide = true; }
+    catch (error) { if (!(error instanceof HttpError)) throw error; }
+  }
+  return { canEdit, canResubmit: canEdit, canDecide };
+}

@@ -1,14 +1,9 @@
 import type { PrismaClient } from '@prisma/client';
-import type { User, PurchaseRequest } from '@prisma/client';
-import { assertApprover, assertOwner } from './authorization.js';
+import type { User } from '@prisma/client';
+import { assertApprover, assertOwner, assertEditable } from './authorization.js';
 import { HttpError } from './policy.js';
 import { approvalInput, revisionInput, submissionInput, type ApprovalInput, type RevisionInput } from './validation.js';
 import { detailInclude, installRoute, transaction } from './workflow-store.js';
-function requireEditable(request: PurchaseRequest, version: number) {
-  if (!['DRAFT', 'CHANGES_REQUESTED'].includes(request.status) || request.version !== version) {
-    throw new HttpError(409, 'Request is not editable at this version');
-  }
-}
 function requireClaim(count: number) {
   if (count !== 1) throw new HttpError(409, 'Workflow changed; reload before retrying');
 }
@@ -66,7 +61,7 @@ export async function edit(db: PrismaClient, actor: User, id: string, raw: Revis
     const request = await tx.purchaseRequest.findUnique({ where: { id } });
     if (!request) throw new HttpError(404, 'Request not found');
     assertOwner(actor, request);
-    requireEditable(request, version);
+    assertEditable(request, version);
     const claimed = await tx.purchaseRequest.updateMany({ where: { id, version, status: request.status, requesterId: actor.id }, data: fields });
     requireClaim(claimed.count);
     await tx.auditEvent.create({ data: {
@@ -82,7 +77,7 @@ export async function resubmit(db: PrismaClient, actor: User, id: string, raw: {
     const request = await tx.purchaseRequest.findUnique({ where: { id } });
     if (!request) throw new HttpError(404, 'Request not found');
     assertOwner(actor, request);
-    requireEditable(request, version);
+    assertEditable(request, version);
     const now = new Date();
     const nextVersion = version + 1;
     const claimed = await tx.purchaseRequest.updateMany({ where: { id, version, status: request.status, requesterId: actor.id },
